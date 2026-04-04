@@ -185,7 +185,96 @@ function App(){
   const saveMedio=()=>{if(!mNom){T('⚠️ Escribe el nombre');return;}if(editId!==null){setData(d=>({...d,mediosPago:d.mediosPago.map(m=>m.id===editId?{...m,nombre:mNom,tipo:mTipo,banco:mBanco,franquicia:mFranq,color:mColor}:m)}));T('✅ Actualizado');}else{setData(d=>({...d,mediosPago:[...d.mediosPago,{id:Date.now(),tipo:mTipo,nombre:mNom,banco:mBanco,franquicia:mFranq,color:mColor}]}));T('💳 Medio agregado');}setEditId(undefined);};
   const delMedio=id=>{setData(d=>({...d,mediosPago:d.mediosPago.filter(m=>m.id!==id)}));T('🗑️ Eliminado');};
 
-  const fetchAITips=async()=>{setShowAI(true);setAiLoading(true);setAiTips('');const porTipo=t=>Math.round(mGastos.filter(g=>tipoOf(g,{})===t).reduce((s,g)=>s+toCOP(g.amount,g.currency,rate),0));const resumen={mes:`${MONTHS[month]} ${year}`,totalGastos:Math.round(totGastos),totalIngresos:Math.round(totIngr),balance:Math.round(balance),tasaAhorro:savRate+'%',porCategoria:catSorted.map(([cat,tot])=>({categoria:cat,total:Math.round(tot)})),porTipo:{fijo:porTipo('fijo'),variable:porTipo('variable'),antojo:porTipo('antojo')}};try{const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Eres un asesor financiero personal amigable. Analiza estos datos y da exactamente 5 consejos prácticos en español. Sé específico con números. Mejora calidad de vida sin renuncias dolorosas. Formato: emoji + título, salto de línea, explicación breve. Datos: ${JSON.stringify(resumen)}`}]})});const d=await res.json();setAiTips(d.content?.[0]?.text||'No se pudo obtener consejos.');}catch{setAiTips('Error al conectar. Intenta de nuevo.');}setAiLoading(false);};
+  const fetchAITips=()=>{
+    setShowAI(true);setAiLoading(true);setAiTips('');
+    setTimeout(()=>{
+      const porTipo=t=>Math.round(mGastos.filter(g=>tipoOf(g,{})===t).reduce((s,g)=>s+toCOP(g.amount,g.currency,rate),0));
+      const fijo=porTipo('fijo'),variable=porTipo('variable'),antojo=porTipo('antojo');
+      const bal=Math.round(balance),ings=Math.round(totIngr),gsts=Math.round(totGastos);
+      const tasa=parseFloat(savRate);
+      const tips=[];
+
+      if(mGastos.length===0){
+        setAiTips('📝 Empieza a registrar
+
+Aún no tienes gastos registrados este mes. Comienza hoy — entre más datos tengas, más útiles serán los consejos.');
+        setAiLoading(false);return;
+      }
+
+      // Consejo 1 — tasa de ahorro
+      if(tasa<0){
+        tips.push('🚨 Estás gastando más de lo que ingresa
+
+Tu balance es negativo en '+fmtCOP(Math.abs(bal))+'. Revisa los gastos variables y antojos — son los más fáciles de reducir temporalmente.');
+      } else if(tasa<10){
+        tips.push('⚠️ Tu tasa de ahorro es muy baja ('+tasa+'%)
+
+Lo ideal es ahorrar al menos el 20% del ingreso. Intenta reducir '+fmtCOP(Math.round(ings*0.1))+' en gastos este mes para llegar al 10%.');
+      } else if(tasa<20){
+        tips.push('📈 Vas bien pero puedes mejorar ('+tasa+'% de ahorro)
+
+Estás ahorrando '+fmtCOP(bal)+' este mes. Con un pequeño ajuste puedes llegar al 20% — solo necesitas reducir '+fmtCOP(Math.round(ings*0.2)-bal)+' más.');
+      } else {
+        tips.push('🏆 Excelente tasa de ahorro: '+tasa+'%
+
+Estás ahorrando '+fmtCOP(bal)+' este mes. Considera invertir ese excedente en tu portafolio de Trii para que trabaje por ti.');
+      }
+
+      // Consejo 2 — antojos
+      if(antojo>0){
+        const pctAntojo=((antojo/gsts)*100).toFixed(1);
+        if(parseFloat(pctAntojo)>30){
+          tips.push('✨ Los antojos representan el '+pctAntojo+'% de tus gastos
+
+Gastaste '+fmtCOP(antojo)+' en antojos. No es malo darse gustos, pero reducir un 30% de esto libera '+fmtCOP(Math.round(antojo*0.3))+' para ahorro.');
+        } else {
+          tips.push('✨ Antojos bajo control ('+pctAntojo+'% del total)
+
+Gastaste '+fmtCOP(antojo)+' en antojos — está dentro de un rango saludable. Sigue así.');
+        }
+      }
+
+      // Consejo 3 — gastos fijos
+      if(fijo>0){
+        const pctFijo=((fijo/gsts)*100).toFixed(1);
+        if(parseFloat(pctFijo)>60){
+          tips.push('🏠 Tus gastos fijos son muy altos ('+pctFijo+'%)
+
+Con '+fmtCOP(fijo)+' en gastos fijos tienes poco margen de maniobra. Evalúa si algún servicio o suscripción ya no te está generando valor real.');
+        } else {
+          tips.push('📌 Gastos fijos estables ('+pctFijo+'%)
+
+Tienes '+fmtCOP(fijo)+' en compromisos fijos mensuales. Buen manejo — este nivel te da flexibilidad para ajustar en meses difíciles.');
+        }
+      }
+
+      // Consejo 4 — categoría más alta
+      if(catSorted.length>0){
+        const [topCat,topVal]=catSorted[0];
+        const pctTop=((topVal/gsts)*100).toFixed(1);
+        tips.push('🔍 Tu mayor gasto: '+topCat+' ('+pctTop+'%)
+
+Gastaste '+fmtCOP(Math.round(topVal))+' en '+topCat.split(' ').slice(1).join(' ')+'. Es tu categoría principal este mes — vale la pena revisar si hay oportunidad de optimizar sin sacrificar calidad de vida.');
+      }
+
+      // Consejo 5 — inversiones / proyección
+      if(bal>0 && ings>0){
+        const anual=bal*12;
+        tips.push('💡 Proyección anual: '+fmtCOP(anual)+'
+
+Si mantienes este ritmo de ahorro todo el año, acumularías '+fmtCOP(anual)+' (≈ '+fmtUSD(anual/rate)+' USD). Invertido en tu portafolio con retorno del 10% anual, en 5 años serían '+fmtCOP(Math.round(anual*6.1))+'.');
+      } else {
+        tips.push('🎯 Define una meta de ahorro mensual
+
+Establece un monto fijo que separes apenas llegue tu ingreso — antes de gastar. Así el ahorro deja de ser lo que sobra y se convierte en prioridad.');
+      }
+
+      setAiTips(tips.join('
+
+'));
+      setAiLoading(false);
+    },800);
+  };
 
   const generatePDF=()=>{const grupos={fijo:[],variable:[],antojo:[]};mGastos.forEach(g=>grupos[tipoOf(g,pdfTipos)].push(g));const totT=t=>grupos[t].reduce((s,g)=>s+toCOP(g.amount,g.currency,rate),0);const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:system-ui,sans-serif;color:#1a1a2e;padding:32px;max-width:700px;margin:0 auto;}h1{font-size:24px;font-weight:800;margin-bottom:4px;}.sub{font-size:13px;color:#888;margin-bottom:24px;}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}.sc{background:#f8f8fc;border-radius:10px;padding:14px;}.sc-l{font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px;font-weight:600;}.sc-v{font-size:18px;font-weight:800;}.sec{margin-bottom:20px;}.sh{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;margin-bottom:8px;}.sf{background:#e8f4fd;}.sv{background:#e8fdf1;}.sa{background:#fff4e8;}.sf span{color:#1d6fa4;}.sv span{color:#16803c;}.sa span{color:#b45309;}table{width:100%;border-collapse:collapse;font-size:13px;}th{text-align:left;padding:8px 10px;background:#f4f4f8;color:#666;font-size:11px;text-transform:uppercase;}td{padding:8px 10px;border-bottom:1px solid #f0f0f4;}.footer{margin-top:24px;font-size:11px;color:#bbb;text-align:center;}</style></head><body><h1>Reporte Jacobo</h1><div class="sub">${MONTHS[month]} ${year} · ${new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'})}</div><div class="summary"><div class="sc"><div class="sc-l">Ingresos</div><div class="sc-v" style="color:#16803c">${fmtCOP(totIngr)}</div></div><div class="sc"><div class="sc-l">Gastos</div><div class="sc-v" style="color:#f76a6a">${fmtCOP(totGastos)}</div></div><div class="sc"><div class="sc-l">Balance</div><div class="sc-v" style="color:${balance>=0?'#16803c':'#f76a6a'}">${fmtCOP(balance)}</div></div></div>${['fijo','variable','antojo'].map(tipo=>{if(!grupos[tipo].length)return'';const tot=totT(tipo),pct=totGastos>0?((tot/totGastos)*100).toFixed(1):'0';const names={fijo:'📌 Gastos Fijos',variable:'🔄 Gastos Variables',antojo:'✨ Antojos'};return`<div class="sec"><div class="sh s${tipo[0]}"><span style="font-weight:700">${names[tipo]}</span><span style="font-weight:800">${fmtCOP(tot)} (${pct}%)</span></div><table><thead><tr><th>Descripción</th><th>Categoría</th><th>Fecha</th><th style="text-align:right">Monto</th></tr></thead><tbody>${grupos[tipo].map(g=>`<tr><td>${g.desc}</td><td>${g.cat}</td><td>${fmtDate(g.date)}</td><td style="text-align:right;font-weight:600">${fmt(g.amount,g.currency,rate)}</td></tr>`).join('')}</tbody></table></div>`;}).join('')}<div class="footer">Jacobo · Tu asistente financiero personal</div></body></html>`;const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);}setShowPDF(false);T('📄 PDF generado');};
 
