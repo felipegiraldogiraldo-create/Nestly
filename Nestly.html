@@ -58,39 +58,7 @@ async function loadFromCloud() {
   return null;
 }
 
-function useCloudSync(data, setData, ready, setReady) {
-  // Load on mount
-  React.useEffect(() => {
-    loadFromCloud().then(cloudData => {
-      if (cloudData && cloudData.gastos) {
-        setData(cloudData);
-      }
-      setReady(true);
-    });
-  }, []);
-
-  // Save on change (debounced)
-  React.useEffect(() => {
-    if (!ready) return;
-    const t = setTimeout(() => saveToCloud(data), 1200);
-    return () => clearTimeout(t);
-  }, [data, ready]);
-
-  // Real-time listener
-  React.useEffect(() => {
-    const unsub = db.collection('nestly').doc(NESTLY_USER)
-      .onSnapshot(doc => {
-        if (doc.exists) {
-          const d = doc.data();
-          setData(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(d)) return d;
-            return prev;
-          });
-        }
-      });
-    return () => unsub();
-  }, []);
-}
+// Firebase sync is handled inline in App component
 
 const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const CAT_COLORS={'🏠 Vivienda':'#7c6af7','🛒 Mercado':'#6af7a8','🚗 Transporte':'#6ab8f7','🍽️ Restaurantes':'#f7a76a','💊 Salud':'#f76a6a','🎮 Entretenimiento':'#c76af7','📱 Servicios':'#f7c76a','👗 Ropa':'#f76ab8','📚 Educación':'#6af7f7','💼 Negocios':'#a8f76a','📈 Inversiones':'#f7e76a','🎁 Otros':'#aaaaaa'};
@@ -131,8 +99,36 @@ function App(){
   const[data,setData]=useState(DEFAULT);
   const[ready,setReady]=useState(false);
   const[syncing,setSyncing]=useState(true);
-  useCloudSync(data, setData, ready, setReady);
-  React.useEffect(()=>{ if(ready) setSyncing(false); },[ready]);
+
+  // Load from Firebase on mount
+  useEffect(()=>{
+    loadFromCloud().then(cloudData=>{
+      if(cloudData&&cloudData.gastos) setData(cloudData);
+      setReady(true);
+      setSyncing(false);
+    });
+  },[]);
+
+  // Save to Firebase on data change (debounced)
+  useEffect(()=>{
+    if(!ready) return;
+    const t=setTimeout(()=>saveToCloud(data),1500);
+    return()=>clearTimeout(t);
+  },[data,ready]);
+
+  // Real-time listener for other devices
+  useEffect(()=>{
+    const unsub=db.collection('nestly').doc(NESTLY_USER).onSnapshot(doc=>{
+      if(doc.exists){
+        const d=doc.data();
+        setData(prev=>{
+          if(JSON.stringify(prev)!==JSON.stringify(d)) return d;
+          return prev;
+        });
+      }
+    });
+    return()=>unsub();
+  },[]);
   const[tab,setTab]=useState('dashboard');
   const[month,setMonth]=useState(new Date().getMonth());
   const[year,setYear]=useState(new Date().getFullYear());
