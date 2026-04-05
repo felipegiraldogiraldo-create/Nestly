@@ -124,11 +124,16 @@ const DOC = db.collection('nestly').doc('felipe');
 
 // ── Constants ─────────────────────────────────────────────
 const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// Dynamic categories - use state.categorias
+const getCatColor=name=>{const c=state.categorias.find(c=>c.nombre===name);return c?c.color:'#aaaaaa';};
+const getCats=()=>state.categorias.map(c=>c.nombre);
+// Keep static fallback for initial render before state loads
 const CAT_COLORS={'🏠 Vivienda':'#7c6af7','🛒 Mercado':'#6af7a8','🚗 Transporte':'#6ab8f7','🍽️ Restaurantes':'#f7a76a','💊 Salud':'#f76a6a','🎮 Entretenimiento':'#c76af7','📱 Servicios':'#f7c76a','👗 Ropa':'#f76ab8','📚 Educación':'#6af7f7','💼 Negocios':'#a8f76a','📈 Inversiones':'#f7e76a','🎁 Otros':'#aaaaaa'};
 const CATS=Object.keys(CAT_COLORS);
 const FREQS=['mensual','quincenal','semanal','anual','único'];
 const FRANQUICIAS=['Visa','Mastercard','Amex','Diners','Discover','Otro'];
 const COLORS=['#6af7a8','#6ab8f7','#f7a76a','#c76af7','#f76ab8','#f7c76a','#f76a6a','#6af7f7','#a8f76a','#f7d76a','#8b7cf8','#f78a6a'];
+const getCatTipo=name=>{const c=state.categorias.find(c=>c.nombre===name);return c?c.tipo:'variable';};
 const CAT_TIPO={'🏠 Vivienda':'fijo','📱 Servicios':'fijo','💊 Salud':'fijo','📚 Educación':'fijo','🛒 Mercado':'variable','🚗 Transporte':'variable','💼 Negocios':'variable','📈 Inversiones':'variable','🍽️ Restaurantes':'antojo','🎮 Entretenimiento':'antojo','👗 Ropa':'antojo','🎁 Otros':'variable'};
 const TC={fijo:'#6ab8f7',variable:'#6af7a8',antojo:'#f7a76a'};
 const TI={fijo:'📌',variable:'🔄',antojo:'✨'};
@@ -142,7 +147,22 @@ let state = {
     {id:3,tipo:'tarjeta',nombre:'Mastercard',banco:'Davivienda',franquicia:'Mastercard',color:'#f7a76a'},
     {id:4,tipo:'efectivo',nombre:'Efectivo',banco:'',franquicia:'',color:'#f7c76a'}
   ],
-  ahorros:[{id:1,plataforma:'Trii',instrumento:'Fondo conservador',meta:0,currency:'USD',snapshots:[]}]
+  ahorros:[{id:1,plataforma:'Trii',instrumento:'Fondo conservador',meta:0,currency:'USD',snapshots:[]}],
+  categorias:[
+    {id:1,nombre:'🏠 Vivienda',color:'#7c6af7',tipo:'fijo'},
+    {id:2,nombre:'🛒 Mercado',color:'#6af7a8',tipo:'variable'},
+    {id:3,nombre:'🚗 Transporte',color:'#6ab8f7',tipo:'variable'},
+    {id:4,nombre:'🍽️ Restaurantes',color:'#f7a76a',tipo:'antojo'},
+    {id:5,nombre:'💊 Salud',color:'#f76a6a',tipo:'fijo'},
+    {id:6,nombre:'🎮 Entretenimiento',color:'#c76af7',tipo:'antojo'},
+    {id:7,nombre:'📱 Servicios',color:'#f7c76a',tipo:'fijo'},
+    {id:8,nombre:'👗 Ropa',color:'#f76ab8',tipo:'antojo'},
+    {id:9,nombre:'📚 Educación',color:'#6af7f7',tipo:'fijo'},
+    {id:10,nombre:'💼 Negocios',color:'#a8f76a',tipo:'variable'},
+    {id:11,nombre:'📈 Inversiones',color:'#f7e76a',tipo:'variable'},
+    {id:12,nombre:'🐾 Mascotas',color:'#f7a76a',tipo:'variable'},
+    {id:13,nombre:'🎁 Otros',color:'#aaaaaa',tipo:'variable'}
+  ]
 };
 let tab='dashboard', month=new Date().getMonth(), year=new Date().getFullYear(), rate=4200;
 let gCur='COP',iCur='COP',aCur='COP',sCur='USD';
@@ -182,7 +202,7 @@ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const today=()=>new Date().toISOString().split('T')[0];
 const daysSince=d=>!d?999:Math.floor((Date.now()-new Date(d+'T12:00:00'))/86400000);
 const medIcon=t=>t==='efectivo'?'💵':t==='cuenta'?'🏦':'💳';
-const tipoOf=g=>g.tipo||CAT_TIPO[g.cat]||'variable';
+const tipoOf=g=>g.tipo||getCatTipo(g.cat)||CAT_TIPO[g.cat]||'variable';
 const alertSt=a=>{const now=new Date(),due=new Date(now.getFullYear(),now.getMonth(),a.day),dl=Math.round((due-now)/86400000);return{dl,status:dl<0?'vencido':dl<=a.remind?(dl===0?'hoy':'pronto'):'ok'};};
 const getMedio=id=>state.mediosPago.find(m=>m.id===parseInt(id));
 
@@ -306,6 +326,86 @@ function openEditMedio(id){
 function openNewMedio(){editMedioId=null;renderCfgMedioForm(null);}
 
 // ── PDF ───────────────────────────────────────────────────
+// ── Categorias ────────────────────────────────────────────
+let editCatId=undefined;
+
+function saveCategoria(){
+  const nom=document.getElementById('cat-nom').value.trim();
+  const color=document.querySelector('#cat-form .color-dot.sel')?.dataset.color||'#aaaaaa';
+  const tipo=document.querySelector('#cat-form .cat-tipo-btn.active')?.dataset.tipo||'variable';
+  if(!nom){showToast('⚠️ Escribe el nombre');return;}
+  if(editCatId!==null&&editCatId!==undefined){
+    state.categorias=state.categorias.map(c=>c.id===editCatId?{...c,nombre:nom,color,tipo}:c);
+    showToast('✅ Categoría actualizada');
+  } else {
+    state.categorias.push({id:Date.now(),nombre:nom,color,tipo});
+    showToast('🏷️ Categoría creada');
+  }
+  saveCloud();editCatId=undefined;renderCfg();render();
+}
+
+function delCategoria(id){
+  state.categorias=state.categorias.filter(c=>c.id!==id);
+  saveCloud();showToast('🗑️ Eliminada');renderCfg();render();
+}
+
+function openNewCategoria(){editCatId=null;renderCfgCatForm(null);}
+function openEditCategoria(id){
+  const c=state.categorias.find(x=>x.id===id);
+  if(!c)return;
+  editCatId=id;renderCfgCatForm(c);
+}
+
+function renderCfgCats(){
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <span style="font-size:13px;color:#65657a">${state.categorias.length} categorías</span>
+    <button onclick="openNewCategoria()" style="padding:8px 14px;border-radius:9px;border:1px solid #8b7cf8;background:rgba(139,124,248,.12);color:#8b7cf8;font-size:12px;font-weight:700;cursor:pointer">+ Nueva</button>
+  </div>`;
+  state.categorias.forEach(c=>{
+    html+=`<div style="display:flex;align-items:center;gap:11px;background:#191926;border-radius:12px;padding:13px;border:1px solid ${c.color}25;margin-bottom:8px">
+      <div style="width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;background:${c.color}15;flex-shrink:0">${c.nombre.split(' ')[0]}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:${c.color}">${c.nombre}</div>
+        <div style="font-size:11px;color:#65657a;margin-top:1px">${c.tipo==='fijo'?'📌 Fijo':c.tipo==='antojo'?'✨ Antojo':'🔄 Variable'}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="openEditCategoria(${c.id})" style="background:rgba(139,124,248,.1);border:1px solid rgba(139,124,248,.25);border-radius:7px;padding:5px 9px;font-size:11px;cursor:pointer;color:#8b7cf8">✏️</button>
+        <button class="btn-del" onclick="delCategoria(${c.id})">✕</button>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+function renderCfgCatForm(c){
+  const el=document.getElementById('modal-cfg');
+  el.classList.remove('hidden');
+  el.innerHTML=`<div class="sheet">
+    <div class="handle"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <button onclick="editCatId=undefined;renderCfg()" style="background:transparent;border:1px solid #252535;color:#65657a;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px">← Volver</button>
+      <span style="font-weight:700;font-size:16px">${c?'Editar categoría':'Nueva categoría'}</span>
+    </div>
+    <div id="cat-form">
+      <div style="margin-bottom:14px">
+        <label class="lbl">Nombre (incluye emoji al inicio)</label>
+        <input class="inp" id="cat-nom" value="${c?.nombre||''}" placeholder="Ej: 🐾 Mascotas">
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="lbl">Tipo de gasto</label>
+        <div style="display:flex;gap:7px">
+          ${['fijo','variable','antojo'].map(t=>`<button class="cat-tipo-btn ${(c?.tipo||'variable')===t?'active':''}" data-tipo="${t}" onclick="document.querySelectorAll('.cat-tipo-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')" style="flex:1;padding:9px 4px;border-radius:9px;border:1px solid ${(c?.tipo||'variable')===t?'#8b7cf8':'#252535'};background:${(c?.tipo||'variable')===t?'rgba(139,124,248,.12)':'#191926'};color:${(c?.tipo||'variable')===t?'#8b7cf8':'#65657a'};font-size:12px;font-weight:600;cursor:pointer">${t==='fijo'?'📌 Fijo':t==='antojo'?'✨ Antojo':'🔄 Variable'}</button>`).join('')}
+        </div>
+      </div>
+      <div style="margin-bottom:20px">
+        <label class="lbl">Color</label>
+        <div class="color-pick">${['#7c6af7','#6af7a8','#6ab8f7','#f7a76a','#f76a6a','#c76af7','#f7c76a','#f76ab8','#6af7f7','#a8f76a','#f7e76a','#aaaaaa'].map(col=>`<div class="color-dot ${(c?.color||'#aaaaaa')===col?'sel':''}" data-color="${col}" style="background:${col}" onclick="document.querySelectorAll('#cat-form .color-dot').forEach(d=>d.classList.remove('sel'));this.classList.add('sel')"></div>`).join('')}</div>
+      </div>
+      <button class="btn-primary" onclick="saveCategoria()">${c?'Guardar cambios':'Crear categoría'}</button>
+    </div>
+  </div>`;
+}
+
 function openPDF(){
   const mg=getMonthGastos();
   pdfTipos={};
@@ -421,7 +521,7 @@ function renderDashboard(){
   html+=`<div class="card"><div class="card-title">Gastos por categoría</div>`;
   if(catSorted.length===0) html+=`<div style="text-align:center;color:#65657a;font-size:13px;padding:10px 0">Sin gastos este mes</div>`;
   else catSorted.forEach(([cat,tot])=>{
-    html+=`<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px"><span>${cat}</span><span style="color:#65657a;font-size:12px">${fmtCOP(tot)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(tot/catMax)*100}%;background:${CAT_COLORS[cat]}"></div></div></div>`;
+    html+=`<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px"><span>${cat}</span><span style="color:#65657a;font-size:12px">${fmtCOP(tot)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(tot/catMax)*100}%;background:${getCatColor(cat)}"></div></div></div>`;
   });
   html+=`</div>`;
 
@@ -437,7 +537,7 @@ function renderDashboard(){
   if(recent.length===0) html+=`<div style="text-align:center;color:#65657a;font-size:13px">Sin transacciones</div>`;
   else recent.forEach(g=>{
     const m=getMedio(g.medio);
-    html+=`<div class="txn"><div class="txn-icon" style="background:${CAT_COLORS[g.cat]}20">${g.cat.split(' ')[0]}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.desc}</div><div style="display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;color:#65657a">${fmtDate(g.date)}</span>${m?`<span class="badge" style="background:${m.color}18;color:${m.color}">${medIcon(m.tipo)} ${m.nombre}</span>`:''}<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:${TC[tipoOf(g)]}18;color:${TC[tipoOf(g)]};font-weight:600">${TI[tipoOf(g)]}</span></div></div><div style="font-size:13px;font-weight:700;color:#f76a6a;flex-shrink:0">-${fmt(g.amount,g.currency)}</div></div>`;
+    html+=`<div class="txn"><div class="txn-icon" style="background:${getCatColor(g.cat)}20">${g.cat.split(' ')[0]}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.desc}</div><div style="display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;color:#65657a">${fmtDate(g.date)}</span>${m?`<span class="badge" style="background:${m.color}18;color:${m.color}">${medIcon(m.tipo)} ${m.nombre}</span>`:''}<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:${TC[tipoOf(g)]}18;color:${TC[tipoOf(g)]};font-weight:600">${TI[tipoOf(g)]}</span></div></div><div style="font-size:13px;font-weight:700;color:#f76a6a;flex-shrink:0">-${fmt(g.amount,g.currency)}</div></div>`;
   });
   html+=`</div>`;
   return html;
@@ -461,7 +561,7 @@ function renderGastos(){
         <div><label class="lbl">Monto</label><input class="inp" id="g-amt" type="number" placeholder="0"></div>
         <div><label class="lbl">Fecha</label><input class="inp" id="g-date" type="date" value="${today()}"></div>
       </div>
-      <div style="margin-bottom:14px"><label class="lbl">Categoría</label><select class="inp" id="g-cat" onchange="gTipo='';render()">${CATS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+      <div style="margin-bottom:14px"><label class="lbl">Categoría</label><select class="inp" id="g-cat" onchange="gTipo='';render()">${getCats().map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
       <div style="margin-bottom:14px">
         <label class="lbl">Tipo <span style="color:#65657a;font-weight:400;text-transform:none;font-size:10px">(auto: ${CAT_TIPO[document.getElementById('g-cat')?.value||CATS[0]]||'variable'})</span></label>
         <div class="tipo-btns">${['fijo','variable','antojo'].map(t=>`<button class="tipo-btn" style="${(gTipo||'_')===t?`border-color:${TC[t]};background:${TC[t]}18;color:${TC[t]}`:''}" onclick="gTipo=gTipo==='${t}'?'':'${t}';render()">${TI[t]} ${cap(t)}</button>`).join('')}</div>
@@ -477,7 +577,7 @@ function renderGastos(){
     if(mg.length===0) html+=`<div class="empty"><div class="empty-icon">💸</div>Sin gastos este mes</div>`;
     else [...mg].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(g=>{
       const m=getMedio(g.medio);
-      html+=`<div class="txn"><div class="txn-icon" style="background:${CAT_COLORS[g.cat]}20">${g.cat.split(' ')[0]}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.desc}</div><div style="display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;color:#65657a">${fmtDate(g.date)}</span>${m?`<span class="badge" style="background:${m.color}18;color:${m.color}">${medIcon(m.tipo)} ${m.nombre}</span>`:''}<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:${TC[tipoOf(g)]}18;color:${TC[tipoOf(g)]};font-weight:600">${TI[tipoOf(g)]} ${tipoOf(g)}</span></div></div><div style="display:flex;align-items:center;gap:7px;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:#f76a6a">-${fmt(g.amount,g.currency)}</div><button class="btn-del" onclick="delGasto(${g.id})">✕</button></div></div>`;
+      html+=`<div class="txn"><div class="txn-icon" style="background:${getCatColor(g.cat)}20">${g.cat.split(' ')[0]}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.desc}</div><div style="display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;color:#65657a">${fmtDate(g.date)}</span>${m?`<span class="badge" style="background:${m.color}18;color:${m.color}">${medIcon(m.tipo)} ${m.nombre}</span>`:''}<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:${TC[tipoOf(g)]}18;color:${TC[tipoOf(g)]};font-weight:600">${TI[tipoOf(g)]} ${tipoOf(g)}</span></div></div><div style="display:flex;align-items:center;gap:7px;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:#f76a6a">-${fmt(g.amount,g.currency)}</div><button class="btn-del" onclick="delGasto(${g.id})">✕</button></div></div>`;
     });
   }
   return html;
@@ -586,7 +686,7 @@ function renderAlertas(){
         <div><label class="lbl">Monto</label><input class="inp" id="a-amt" type="number" placeholder="0"></div>
         <div><label class="lbl">Día del mes</label><input class="inp" id="a-day" type="number" min="1" max="31" placeholder="Ej: 5"></div>
       </div>
-      <div style="margin-bottom:14px"><label class="lbl">Categoría</label><select class="inp" id="a-cat">${CATS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+      <div style="margin-bottom:14px"><label class="lbl">Categoría</label><select class="inp" id="a-cat">${getCats().map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
       <div style="margin-bottom:16px"><label class="lbl">Anticipación</label><select class="inp" id="a-remind">${[1,3,5,7].map(d=>`<option value="${d}">${d} día${d>1?'s':''} antes</option>`).join('')}</select></div>
       <button class="btn-primary" onclick="addAlerta()">Crear alerta</button>
     </div>`;
@@ -623,9 +723,10 @@ function renderCfg(){
     </div>
     <div class="subtabs" style="margin-bottom:20px">
       <button class="subtab ${cfgTab==='medios'?'active':''}" onclick="cfgTab='medios';renderCfg()">💳 Medios</button>
+      <button class="subtab ${cfgTab==='cats'?'active':''}" onclick="cfgTab='cats';renderCfg()">🏷️ Categorías</button>
       <button class="subtab ${cfgTab==='app'?'active':''}" onclick="cfgTab='app';renderCfg()">⚙️ App</button>
     </div>
-    ${cfgTab==='medios'?renderCfgMedios():renderCfgApp()}
+    ${cfgTab==='medios'?renderCfgMedios():cfgTab==='cats'?renderCfgCats():renderCfgApp()}
   </div>`;
 }
 
