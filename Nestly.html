@@ -243,7 +243,19 @@ function closeModal(id){document.getElementById('m-'+id).classList.remove('open'
 
 function chMonth(d){month+=d;if(month>11){month=0;year++;}if(month<0){month=11;year--;}render();}
 
-function setCur(which,val){if(which==='g')gCur=val;else if(which==='i')iCur=val;else if(which==='a')aCur=val;else sCur=val;render();}
+function setCur(which,val){
+  // Save current form values before re-render
+  const saved={desc:v('g-desc'),amt:v('g-amt'),date:v('g-date'),cat:v('g-cat'),notes:v('g-notes'),iname:v('i-name'),iamt:v('i-amt'),iday:v('i-day'),aname:v('a-name'),aamt:v('a-amt'),aday:v('a-day'),splat:v('s-plat'),sinstr:v('s-instr'),smeta:v('s-meta')};
+  if(which==='g')gCur=val;else if(which==='i')iCur=val;else if(which==='a')aCur=val;else sCur=val;
+  render();
+  // Restore form values
+  if(saved.desc)set('g-desc',saved.desc);if(saved.amt)set('g-amt',saved.amt);if(saved.date)set('g-date',saved.date);
+  if(saved.cat){const el=document.getElementById('g-cat');if(el)el.value=saved.cat;}
+  if(saved.notes)set('g-notes',saved.notes);
+  if(saved.iname)set('i-name',saved.iname);if(saved.iamt)set('i-amt',saved.iamt);if(saved.iday)set('i-day',saved.iday);
+  if(saved.aname)set('a-name',saved.aname);if(saved.aamt)set('a-amt',saved.aamt);if(saved.aday)set('a-day',saved.aday);
+  if(saved.splat)set('s-plat',saved.splat);if(saved.sinstr)set('s-instr',saved.sinstr);if(saved.smeta)set('s-meta',saved.smeta);
+}
 
 function curtog(which,cur){
   return `<div class="curtog">
@@ -300,7 +312,38 @@ function addSnap(){
 }
 
 function setGTipo(t){gTipo=gTipo===t?'':t;render();}
-function setGMedio(id){gMedio=id;render();}
+function setGTipoBtn(t){
+  gTipo=gTipo===t?'':t;
+  ['fijo','variable','antojo'].forEach(x=>{
+    const b=document.getElementById('tbtn-'+x);
+    if(!b)return;
+    const on=(gTipo||'_')===x;
+    b.className='tbtn'+(on?' on':'');
+    b.style.borderColor=on?TC[x]:'';
+    b.style.background=on?TC[x]+'18':'';
+    b.style.color=on?TC[x]:'';
+  });
+}
+function updateTipoLabel(){
+  const cat=v('g-cat');
+  const lbl=document.getElementById('tipo-auto-lbl');
+  if(lbl)lbl.textContent='(auto: '+catTipo(cat)+')';
+  gTipo='';
+  ['fijo','variable','antojo'].forEach(x=>{
+    const b=document.getElementById('tbtn-'+x);
+    if(!b)return;
+    b.className='tbtn';b.style.borderColor='';b.style.background='';b.style.color='';
+  });
+}
+function setGMedio(id){
+  gMedio=String(id);
+  document.querySelectorAll('.mbtn2').forEach(b=>{
+    const on=b.dataset.mid===String(id);
+    b.style.borderColor=on?b.dataset.color:'';
+    b.style.background=on?b.dataset.color+'18':'';
+    b.style.color=on?b.dataset.color:'';
+  });
+}
 function setGCat(el){gTipo='';render();}
 
 // ── Medios CRUD ──
@@ -488,14 +531,14 @@ function renderGastos(){
         <div><label class="lbl">Monto</label><input class="inp" id="g-amt" type="number" placeholder="0"></div>
         <div><label class="lbl">Fecha</label><input class="inp" id="g-date" type="date" value="${today()}"></div>
       </div>
-      <div class="fg"><label class="lbl">Categoría</label><select class="inp" id="g-cat" onchange="gTipo='';render()">${catOpts}</select></div>
+      <div class="fg"><label class="lbl">Categoría</label><select class="inp" id="g-cat" onchange="gTipo='';updateTipoLabel()">${catOpts}</select></div>
       <div class="fg">
-        <label class="lbl">Tipo <span style="color:#65657a;font-weight:400;text-transform:none;font-size:10px">(auto: ${autoTipo})</span></label>
-        <div class="tipo-row">${['fijo','variable','antojo'].map(t=>`<button class="tbtn ${(gTipo||'_')===t?'on':''}" style="${(gTipo||'_')===t?`border-color:${TC[t]};background:${TC[t]}18;color:${TC[t]}`:''}" onclick="setGTipo('${t}')">${TI[t]} ${cap(t)}</button>`).join('')}</div>
+        <label class="lbl">Tipo <span id="tipo-auto-lbl" style="color:#65657a;font-weight:400;text-transform:none;font-size:10px">(auto: ${autoTipo})</span></label>
+        <div class="tipo-row">${['fijo','variable','antojo'].map(t=>`<button class="tbtn ${(gTipo||'_')===t?'on':''}" id="tbtn-${t}" style="${(gTipo||'_')===t?`border-color:${TC[t]};background:${TC[t]}18;color:${TC[t]}`:''}" onclick="setGTipoBtn('${t}')">${TI[t]} ${cap(t)}</button>`).join('')}</div>
       </div>
       <div class="fg">
         <label class="lbl">Medio de pago <span style="color:#f76a6a">*</span></label>
-        <div class="mbrow">${S.mediosPago.map(m=>{const on=String(gMedio)===String(m.id);return`<button class="mbtn2 ${on?'on':''}" style="${on?`border-color:${m.color};background:${m.color}18;color:${m.color}`:''}" onclick="setGMedio('${m.id}')">${medIcon(m.tipo)} ${m.nombre}${m.franquicia&&m.tipo==='tarjeta'?' ('+m.franquicia+')':''}</button>`;}).join('')}</div>
+        <div class="mbrow">${S.mediosPago.map(m=>{const on=String(gMedio)===String(m.id);return`<button class="mbtn2" data-mid="${m.id}" data-color="${m.color}" style="${on?`border-color:${m.color};background:${m.color}18;color:${m.color}`:''}" onclick="setGMedio('${m.id}')">${medIcon(m.tipo)} ${m.nombre}${m.franquicia&&m.tipo==='tarjeta'?' ('+m.franquicia+')':''}</button>`;}).join('')}</div>
       </div>
       <div class="fg"><label class="lbl">Notas (opcional)</label><input class="inp" id="g-notes" placeholder="Detalles..."></div>
       <button class="btn btn-acc" onclick="addGasto()">Registrar gasto</button>
