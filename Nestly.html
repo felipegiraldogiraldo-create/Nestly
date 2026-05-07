@@ -102,6 +102,34 @@ input,select,button,textarea{font-family:'Outfit',sans-serif;outline:none;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .ai-tip{background:#191926;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid rgba(139,124,248,.2);}
 .confirm-del{background:rgba(247,106,106,.1);border:1px solid rgba(247,106,106,.4);border-radius:12px;padding:14px;}
+/* Light theme */
+body.light{background:#f0f0f8;color:#1a1a2e;}
+body.light .topbar{background:#f0f0f8;border-color:#d0d0e0;}
+body.light .nav{background:#e0e0f0;border-color:#c8c8de;}
+body.light .navbtn{color:#555570;}
+body.light .navbtn.on{background:#8b7cf8;color:#fff;}
+body.light .gearbtn{background:#e0e0f0;border-color:#c8c8de;color:#555570;}
+body.light .card{background:#ffffff;border-color:#d0d0e0;}
+body.light .inp{background:#f5f5ff;border-color:#c8c8de;color:#1a1a2e;}
+body.light .stat{background:#f5f5ff;border-color:#d0d0e0;}
+body.light .txn{background:#f5f5ff;border-color:#d0d0e0;}
+body.light .bar-track{background:#e0e0f0;}
+body.light .slbl{color:#888898;}
+body.light .ssub{color:#888898;}
+body.light .empty{color:#888898;}
+body.light .ctitle{color:#888898;}
+body.light .srow{border-color:#d0d0e0;}
+body.light .sdiv{color:#888898;border-color:#d0d0e0;}
+body.light .close-btn{border-color:#c8c8de;color:#555570;}
+body.light .back-btn{border-color:#c8c8de;color:#555570;}
+body.light .tbtn{background:#f0f0f8;border-color:#c8c8de;color:#888898;}
+body.light .tbtn.on{background:#8b7cf8;color:#fff;border-color:#8b7cf8;}
+body.light .handle{background:#c8c8de;}
+body.light ::-webkit-scrollbar-thumb{background:#c0c0d0;}
+body.light .overlay .card{background:#ffffff;}
+/* Export button */
+.btn-export{background:rgba(139,124,248,.12);color:#8b7cf8;border:1px solid rgba(139,124,248,.3);border-radius:8px;padding:6px 13px;font-size:12px;cursor:pointer;font-weight:600;font-family:'Outfit',sans-serif;}
+body.light .btn-export{background:rgba(139,124,248,.15);color:#7060e0;border-color:rgba(139,124,248,.4);}
 </style>
 </head>
 <body>
@@ -116,6 +144,7 @@ input,select,button,textarea{font-family:'Outfit',sans-serif;outline:none;}
       <button class="navbtn" onclick="goTab('alertas')">🔔</button>
     </div>
     <button class="gearbtn" onclick="openModal('cfg')">⚙️</button>
+  <button class="gearbtn" onclick="toggleTheme()" id="theme-btn" title="Cambiar tema">🌙</button>
   </div>
 </div>
 
@@ -182,6 +211,7 @@ let S = {
   presupuestos: {}
 };
 let tab='dashboard', month=new Date().getMonth(), year=new Date().getFullYear(), rate=4200;
+let darkMode=true;
 let gSearch='',gFilterCat='',iSearch='';
 let gCur='COP',iCur='COP',aCur='COP',sCur='USD',gTipo='',gMedio='';
 let subG='reg',subI='reg',subA='nueva';
@@ -612,7 +642,31 @@ function renderDash(){
       </table></div>
     </div>`;
   }
-return h;
+// Gráfica de gastos por categoría
+  {
+    const cats={};
+    (S.gastos||[]).forEach(g=>{const c=g.cat||'Otros';cats[c]=(cats[c]||0)+(g.monto||0);});
+    const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    if(entries.length>0){
+      const maxVal=entries[0][1]||1;
+      const bars=entries.map(([cat,val])=>{
+        const pct=Math.round((val/maxVal)*100);
+        return `<div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+            <span>${cat}</span><span style="color:#8b7cf8;">${fmtCOP(val)}</span>
+          </div>
+          <div style="background:#191926;border-radius:99px;height:8px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#8b7cf8,#b09cf8);border-radius:99px;transition:width .6s ease;"></div>
+          </div>
+        </div>`;
+      }).join('');
+      h+=`<div class="card">
+        <div class="ctitle">📊 Gastos por Categoría</div>
+        ${bars}
+      </div>`;
+    }
+  }
+  return h;
 }
 
 // ── GASTOS ──
@@ -676,6 +730,9 @@ function renderGastos(){
       </div>`;
     });
   }
+  h+=`<div style="text-align:right;margin-bottom:10px;">
+    <button class="btn-export" onclick="exportCSV('gastos')">⬇️ Exportar CSV</button>
+  </div>`;
   return h;
 }
 
@@ -711,6 +768,9 @@ function renderIngresos(){
       </div>`;
     });
   }
+  h+=`<div style="text-align:right;margin-bottom:10px;">
+    <button class="btn-export" onclick="exportCSV('ingresos')">⬇️ Exportar CSV</button>
+  </div>`;
   return h;
 }
 
@@ -902,6 +962,39 @@ function miniChart(snaps){
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// TEMA CLARO/OSCURO
+// ═══════════════════════════════════════════════════
+function toggleTheme(){
+  darkMode=!darkMode;
+  document.body.classList.toggle('light',!darkMode);
+  render();
+}
+
+// ═══════════════════════════════════════════════════
+// EXPORTAR CSV
+// ═══════════════════════════════════════════════════
+function exportCSV(tipo){
+  const S=state;
+  let rows,headers,filename;
+  if(tipo==='gastos'){
+    headers=['Fecha','Descripcion','Monto','Categoria','Recurrente'];
+    rows=(S.gastos||[]).map(g=>[g.fecha||'',g.desc||'',(g.monto||0).toFixed(2),g.cat||'',g.recurrente?'Si':'No']);
+    filename='gastos_nestly.csv';
+  } else {
+    headers=['Fecha','Descripcion','Monto','Categoria'];
+    rows=(S.ingresos||[]).map(i=>[i.fecha||'',i.desc||'',(i.monto||0).toFixed(2),i.category||'Otros']);
+    filename='ingresos_nestly.csv';
+  }
+  const csv=[headers,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exportado ✓');
+}
+
 render();
 </script>
 </body>
