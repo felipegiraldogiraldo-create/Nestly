@@ -178,7 +178,8 @@ const TI = {fijo:'📌',variable:'🔄',antojo:'✨'};
 let S = {
   gastos:[], ingresos:[], alertas:[],
   mediosPago: DEF_MEDIOS,
-  categorias: DEF_CATS
+  categorias: DEF_CATS,
+  presupuestos: {}
 };
 let tab='dashboard', month=new Date().getMonth(), year=new Date().getFullYear(), rate=4200;
 let gSearch='',gFilterCat='',iSearch='';
@@ -192,7 +193,7 @@ let pdfTipos={}, saveT=null, ready=false;
 // FIREBASE SYNC
 // ═══════════════════════════════════════════════════
 DOC.get().then(d=>{
-  if(d.exists){const v=d.data();if(v&&v.gastos){S=v;if(!S.categorias)S.categorias=DEF_CATS;}}
+  if(d.exists){const v=d.data();if(v&&v.gastos){S=v;if(!S.categorias)S.categorias=DEF_CATS;if(!S.presupuestos)S.presupuestos={};}}
   ready=true; render();
 }).catch(()=>{ready=true;render();});
 
@@ -224,6 +225,23 @@ function applyRecurrentes(){
   if(added){save();render();}
 }
 
+function setBudget(cat,val){
+  if(!S.presupuestos)S.presupuestos={};
+  const v=parseFloat(val)||0;
+  if(v>0)S.presupuestos[cat]=v; else delete S.presupuestos[cat];
+  save();render();
+}
+function histBalance(){
+  const res=[],now=new Date();
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const m=d.getMonth(),y=d.getFullYear();
+    const tg=S.gastos.filter(g=>{const gd=new Date(g.date+'T12:00:00');return gd.getMonth()===m&&gd.getFullYear()===y;}).reduce((s,g)=>s+toCOP(g.amount,g.currency),0);
+    const ti=S.ingresos.filter(ig=>{if(!ig.date)return false;const id=new Date(ig.date+'T12:00:00');return id.getMonth()===m&&id.getFullYear()===y;}).reduce((s,ig)=>s+toCOP(ig.amount,ig.currency),0);
+    res.push({m,y,tg,ti,bal:ti-tg});
+  }
+  return res;
+}
 // ═══════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════
@@ -676,7 +694,61 @@ function renderAlertas(){
       </div>`;
     });
   }
-  return h;
+  
+  {
+    const presCats=S.categorias.filter(c=>S.presupuestos&&S.presupuestos[c.nombre]>0);
+    const hasPres=presCats.length>0;
+    h+=`<div class="card" style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="ctitle" style="margin:0">Presupuestos</div>
+        <button class="btn" style="font-size:12px;padding:4px 10px;background:#252535" onclick="document.getElementById('pres-form').style.display=document.getElementById('pres-form').style.display==='none'?'block':'none'">⚙️ Editar</button>
+      </div>
+      <div id="pres-form" style="display:none;margin-bottom:12px;background:#151523;padding:10px;border-radius:8px">
+        <div style="font-size:12px;color:#888;margin-bottom:8px">Presupuesto mensual por categoría (0 = sin límite):</div>
+        ${S.categorias.map(c=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="flex:1;font-size:13px">${c.nombre}</span>
+          <input type="number" style="width:110px;background:#1e1e2e;border:1px solid #2a2a3a;border-radius:6px;padding:4px 8px;color:#eee;font-size:13px"
+            placeholder="0" value="${S.presupuestos?.[c.nombre]||''}"
+            onchange="setBudget('${c.nombre.replace(/'/g,'')}',this.value)">
+        </div>`).join('')}
+      </div>
+      ${hasPres?presCats.map(c=>{
+        const spent=ct[c.nombre]||0;
+        const budget=S.presupuestos[c.nombre];
+        const pct=Math.min((spent/budget)*100,100);
+        const clr=pct>=90?'#f77a7a':pct>=70?'#f7c97a':'#7c6af7';
+        return `<div style="margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span>${c.nombre}</span>
+            <span style="color:${clr}">${fmtCOP(spent)} / ${fmtCOP(budget)}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${clr}"></div></div>
+        </div>`;
+      }).join(''):`<div style="color:#888;font-size:13px;text-align:center;padding:8px 0">Sin presupuestos. <button class="btn" style="font-size:12px;padding:3px 8px;background:#252535" onclick="document.getElementById('pres-form').style.display='block'">Agregar +</button></div>`}
+    </div>`;
+  }
+
+  {
+    const hb=histBalance();
+    h+=`<div class="card" style="margin-top:14px">
+      <div class="ctitle">Balance Histórico</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>
+          <th style="text-align:left;padding:5px 4px;color:#888;font-weight:500;border-bottom:1px solid #2a2a3a">Mes</th>
+          <th style="text-align:right;padding:5px 4px;color:#888;font-weight:500;border-bottom:1px solid #2a2a3a">Ingresos</th>
+          <th style="text-align:right;padding:5px 4px;color:#888;font-weight:500;border-bottom:1px solid #2a2a3a">Gastos</th>
+          <th style="text-align:right;padding:5px 4px;color:#888;font-weight:500;border-bottom:1px solid #2a2a3a">Balance</th>
+        </tr></thead>
+        <tbody>${hb.map(r=>`<tr style="${r.m===month&&r.y===year?'background:rgba(124,106,247,.12)':''}">
+          <td style="padding:5px 4px">${MONTHS[r.m].substring(0,3)} ${r.y}</td>
+          <td style="text-align:right;padding:5px 4px;color:#6af7a8">${r.ti>0?fmtCOP(r.ti):'-'}</td>
+          <td style="text-align:right;padding:5px 4px;color:#f77a7a">${r.tg>0?fmtCOP(r.tg):'-'}</td>
+          <td style="text-align:right;padding:5px 4px;font-weight:600;color:${r.bal>=0?'#6af7a8':'#f77a7a'}">${r.ti||r.tg?fmtCOP(r.bal):'-'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+return h;
 }
 
 // ── CFG MODAL ──
