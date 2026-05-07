@@ -181,6 +181,7 @@ let S = {
   categorias: DEF_CATS
 };
 let tab='dashboard', month=new Date().getMonth(), year=new Date().getFullYear(), rate=4200;
+let gSearch='',gFilterCat='',iSearch='';
 let gCur='COP',iCur='COP',aCur='COP',sCur='USD',gTipo='',gMedio='';
 let subG='reg',subI='reg',subA='nueva';
 let editGastoId=null, editIngresoId=null;
@@ -240,7 +241,7 @@ const catClr = n=>{const c=getCat(n);return c?c.color:'#aaaaaa';};
 const catTipo= n=>{const c=getCat(n);return c?c.tipo:'variable';};
 const tipoOf = g=>g.tipo||catTipo(g.cat)||'variable';
 const getMed = id=>S.mediosPago.find(m=>m.id===parseInt(id));
-const getMG  = ()=>S.gastos.filter(g=>{const d=new Date(g.date+'T12:00:00');return d.getMonth()===month&&d.getFullYear()===year;});
+const getMG  = ()=>S.gastos.filter(g=>{const d=new Date(g.date+'T12:00:00');return d.getMonth()===month&&d.getFullYear()===year&&(!gSearch||(g.desc||'').toLowerCase().includes(gSearch.toLowerCase()))&&(!gFilterCat||g.cat===gFilterCat);});
 const totI   = ()=>S.ingresos.filter(i=>{if(!i.date)return true;const d=new Date(i.date+'T12:00:00');return d.getMonth()===month&&d.getFullYear()===year;}).reduce((s,i)=>s+toCOP(i.amount,i.currency),0);
 const alertSt= a=>{const n=new Date(),d=new Date(n.getFullYear(),n.getMonth(),a.day),dl=Math.round((d-n)/86400000);return{dl,st:dl<0?'v':dl<=a.remind?(dl===0?'h':'p'):'ok'};};
 
@@ -577,7 +578,15 @@ function renderGastos(){
       <button class="btn btn-acc" onclick="addGasto()">${editGastoId?'Guardar cambios':'Registrar gasto'}</button>
     </div>`;
   } else {
-    if(!mg.length)h+=`<div class="empty"><div class="empty-i">💸</div>Sin gastos este mes</div>`;
+    h+=`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+        <input class="inp" style="flex:1;font-size:13px" placeholder="🔍 Buscar..." oninput="gSearch=this.value;render()" value="${gSearch}">
+        <select class="inp" style="font-size:13px;max-width:130px" onchange="gFilterCat=this.value;render()">
+          <option value="">Todas</option>
+          ${S.categorias.map(c=>`<option value="${c.nombre}" ${gFilterCat===c.nombre?'selected':''}>${c.nombre.split(' ').slice(1).join(' ')||c.nombre}</option>`).join('')}
+        </select>
+        ${gSearch||gFilterCat?`<button class="btn" style="font-size:12px;padding:4px 10px;background:#444;border-radius:8px" onclick="gSearch='';gFilterCat='';render()">✕</button>`:''}
+      </div>`;
+      if(!mg.length)h+=`<div class="empty"><div class="empty-i">💸</div>Sin gastos este mes</div>`;
     else [...mg].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(g=>{
       const m=getMed(g.medio),tp=tipoOf(g);
       h+=`<div class="txn"><div class="ticon" style="background:${catClr(g.cat)}20">${g.cat.split(' ')[0]}</div>
@@ -618,8 +627,12 @@ function renderIngresos(){
       <button class="btn btn-ok" onclick="addIngreso()">${editIngresoId?'Guardar cambios':'Agregar ingreso'}</button>
     </div>`;
   } else {
-    if(!S.ingresos.length)h+=`<div class="empty"><div class="empty-i">💰</div>Sin ingresos registrados.</div>`;
-    else S.ingresos.forEach(i=>{
+    h+=`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+        <input class="inp" style="flex:1;font-size:13px" placeholder="🔍 Buscar ingreso..." oninput="iSearch=this.value;render()" value="${iSearch}">
+        ${iSearch?`<button class="btn" style="font-size:12px;padding:4px 10px;background:#444;border-radius:8px" onclick="iSearch='';render()">✕</button>`:''}
+      </div>`;
+      if(!S.ingresos.length)h+=`<div class="empty"><div class="empty-i">💰</div>Sin ingresos registrados.</div>`;
+    else [...S.ingresos].filter(i=>(!iSearch||(i.name||'').toLowerCase().includes(iSearch.toLowerCase()))).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).forEach(i=>{
       h+=`<div class="txn"><span style="font-size:22px">💰</span>
         <div style="flex:1"><div style="font-size:13px;font-weight:500">${i.name}</div><div style="font-size:12px;color:#65657a">${i.date?fmtD(i.date):''}</div><div style="font-size:11px;color:#7c6af7;margin-top:3px">${i.category||'Otros'}</div></div>
         <div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:#6af7a8">${fmt(i.amount,i.currency)}</span><button class="btn-edit" onclick="openEditIngreso(${i.id})">✏️</button><button class="btn-del" onclick="delIngreso(${i.id})">✕</button></div>
