@@ -197,12 +197,30 @@ DOC.get().then(d=>{
 
 DOC.onSnapshot(d=>{
   if(!ready)return;
-  if(d.exists){const v=d.data();if(v&&v.gastos&&JSON.stringify(v)!==JSON.stringify(S)){S=v;if(!S.categorias)S.categorias=DEF_CATS;render();}}
+  if(d.exists){const v=d.data();if(v&&v.gastos&&JSON.stringify(v)!==JSON.stringify(S)){S=v;if(!S.categorias)S.categorias=DEF_CATS;render();applyRecurrentes();}}
 });
 
 function save(){
   clearTimeout(saveT);
   saveT=setTimeout(()=>{if(ready)DOC.set(S).catch(console.error);},1500);
+}
+function applyRecurrentes(){
+  const now=new Date(),cy=now.getFullYear(),cm=now.getMonth();
+  const templates=S.gastos.filter(g=>g.recurrente===true);
+  if(!templates.length)return;
+  let added=false;
+  templates.forEach(t=>{
+    const already=S.gastos.some(g=>g.sourceId===t.id&&new Date(g.date).getFullYear()===cy&&new Date(g.date).getMonth()===cm);
+    if(!already){
+      const d=t.date?new Date(t.date):now;
+      const day=d.getDate();
+      const nd=new Date(cy,cm,Math.min(day,new Date(cy,cm+1,0).getDate()));
+      const ds=nd.toISOString().slice(0,10);
+      S.gastos.push({...t,id:Date.now()+(Math.random()*1000|0),date:ds,recurrente:false,sourceId:t.id});
+      added=true;
+    }
+  });
+  if(added){save();render();}
 }
 
 // ═══════════════════════════════════════════════════
@@ -272,14 +290,15 @@ let _selColor='#6ab8f7';
 // ═══════════════════════════════════════════════════
 function addGasto(){
   const d=v('g-desc'),a=parseFloat(v('g-amt')||0),dt=v('g-date'),cat=v('g-cat'),n=v('g-notes');
+  const rec=document.getElementById('g-rec')?.checked||false;
   if(!d||!a||!dt||!gMedio){toast('⚠️ Completa todos los campos incluyendo medio de pago');return;}
   if(editGastoId){
-    S.gastos=S.gastos.map(g=>g.id===editGastoId?{...g,desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable'}:g);
+    S.gastos=S.gastos.map(g=>g.id===editGastoId?{...g,desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable',recurrente:rec}:g);
     editGastoId=null;
     save();toast('✅ Gasto actualizado');render();
   } else {
-    S.gastos.push({id:Date.now(),desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable'});
-    save();set('g-desc','');set('g-amt','');set('g-notes','');gMedio='';gTipo='';toast('✅ Gasto registrado');render();
+    S.gastos.push({id:Date.now(),desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable',recurrente:rec});
+    save();set('g-desc','');set('g-amt','');set('g-notes','');gMedio='';gTipo='';const rcb=document.getElementById('g-rec');if(rcb)rcb.checked=false;toast('✅ Gasto registrado');render();
   }
 }
 function delGasto(id){if(!confirm('Eliminar este gasto?'))return;S.gastos=S.gastos.filter(g=>g.id!==id);save();toast('🗑️ Eliminado');render();}
@@ -304,7 +323,7 @@ function openEditGasto(id){
   gCur=g.currency||'COP';gTipo=g.tipo||'';gMedio=String(g.medio||'');
   render();
   setTimeout(()=>{
-    set('g-desc',g.desc);set('g-amt',g.amount);set('g-date',g.date);set('g-notes',g.notes||'');
+    set('g-desc',g.desc);set('g-amt',g.amount);set('g-date',g.date);set('g-notes',g.notes||'');const grcb=document.getElementById('g-rec');if(grcb)grcb.checked=!!g.recurrente;
     const catSel=document.getElementById('g-cat');if(catSel)catSel.value=g.cat;
     updateTipoLabel();
   },50);
@@ -554,6 +573,7 @@ function renderGastos(){
         <div class="mbrow">${S.mediosPago.map(m=>{const on=String(gMedio)===String(m.id);return`<button class="mbtn2" data-mid="${m.id}" data-color="${m.color}" style="${on?`border-color:${m.color};background:${m.color}18;color:${m.color}`:''}" onclick="setGMedio('${m.id}')">${medIcon(m.tipo)} ${m.nombre}${m.franquicia&&m.tipo==='tarjeta'?' ('+m.franquicia+')':''}</button>`;}).join('')}</div>
       </div>
       <div class="fg"><label class="lbl">Notas (opcional)</label><input class="inp" id="g-notes" placeholder="Detalles..."></div>
+      <div class="fg" style="display:flex;align-items:center;gap:10px;padding:4px 0"><input type="checkbox" id="g-rec" style="width:16px;height:16px;accent-color:#7c6af7;cursor:pointer"><label class="lbl" style="margin:0;cursor:pointer;font-size:13px">Gasto recurrente (se repite cada mes)</label></div>
       <button class="btn btn-acc" onclick="addGasto()">${editGastoId?'Guardar cambios':'Registrar gasto'}</button>
     </div>`;
   } else {
@@ -561,7 +581,7 @@ function renderGastos(){
     else [...mg].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(g=>{
       const m=getMed(g.medio),tp=tipoOf(g);
       h+=`<div class="txn"><div class="ticon" style="background:${catClr(g.cat)}20">${g.cat.split(' ')[0]}</div>
-        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.desc}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.recurrente?'🔁 ':''}${g.desc}</div>
         <div style="display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap">
           <span style="font-size:11px;color:#65657a">${fmtD(g.date)}</span>
           ${m?`<span class="badge" style="background:${m.color}18;color:${m.color}">${medIcon(m.tipo)} ${m.nombre}</span>`:''}
