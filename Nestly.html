@@ -44,6 +44,7 @@ input,select,button,textarea{font-family:'Outfit',sans-serif;outline:none;}
 .btn-blue{background:rgba(106,184,247,.12);color:#6ab8f7;border:1px solid rgba(106,184,247,.3);}
 .btn-ai{background:rgba(139,124,248,.12);color:#8b7cf8;border:1px solid rgba(139,124,248,.3);}
 .btn-del{background:transparent;color:#f76a6a;border:1px solid rgba(247,106,106,.25);border-radius:7px;padding:5px 9px;font-size:11px;cursor:pointer;flex-shrink:0;}
+.btn-edit{background:transparent;color:#8b8bf7;border:1px solid rgba(139,139,247,.25);border-radius:7px;padding:5px 9px;font-size:11px;cursor:pointer;flex-shrink:0;}
 .btn-edit{background:rgba(139,124,248,.1);border:1px solid rgba(139,124,248,.25);border-radius:7px;padding:5px 9px;font-size:11px;cursor:pointer;color:#8b7cf8;}
 .btn-sm{padding:8px 14px;border-radius:9px;border:1px solid #8b7cf8;background:rgba(139,124,248,.12);color:#8b7cf8;font-size:12px;font-weight:700;cursor:pointer;}
 /* Sub tabs */
@@ -182,6 +183,7 @@ let S = {
 let tab='dashboard', month=new Date().getMonth(), year=new Date().getFullYear(), rate=4200;
 let gCur='COP',iCur='COP',aCur='COP',sCur='USD',gTipo='',gMedio='';
 let subG='reg',subI='reg',subA='nueva';
+let editGastoId=null, editIngresoId=null;
 let cfgView='main', editMedioId=null, editCatId=null;
 let pdfTipos={}, saveT=null, ready=false;
 
@@ -271,18 +273,52 @@ let _selColor='#6ab8f7';
 function addGasto(){
   const d=v('g-desc'),a=parseFloat(v('g-amt')||0),dt=v('g-date'),cat=v('g-cat'),n=v('g-notes');
   if(!d||!a||!dt||!gMedio){toast('⚠️ Completa todos los campos incluyendo medio de pago');return;}
-  S.gastos.push({id:Date.now(),desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable'});
-  save();set('g-desc','');set('g-amt','');set('g-notes','');gMedio='';gTipo='';toast('✅ Gasto registrado');render();
+  if(editGastoId){
+    S.gastos=S.gastos.map(g=>g.id===editGastoId?{...g,desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable'}:g);
+    editGastoId=null;
+    save();toast('✅ Gasto actualizado');render();
+  } else {
+    S.gastos.push({id:Date.now(),desc:d,amount:a,currency:gCur,date:dt,cat,notes:n,medio:parseInt(gMedio),tipo:gTipo||catTipo(cat)||'variable'});
+    save();set('g-desc','');set('g-amt','');set('g-notes','');gMedio='';gTipo='';toast('✅ Gasto registrado');render();
+  }
 }
 function delGasto(id){S.gastos=S.gastos.filter(g=>g.id!==id);save();toast('🗑️ Eliminado');render();}
 
 function addIngreso(){
   const n=v('i-name'),a=parseFloat(v('i-amt')||0),dt=v('i-date')||new Date().toISOString().slice(0,10);
   if(!n||!a){toast('⚠️ Completa los campos');return;}
-  S.ingresos.push({id:Date.now(),name:n,amount:a,currency:iCur,date:dt});
-  save();set('i-name','');set('i-amt','');set('i-date','');toast('✅ Ingreso agregado');render();
+  if(editIngresoId){
+    S.ingresos=S.ingresos.map(i=>i.id===editIngresoId?{...i,name:n,amount:a,currency:iCur,date:dt}:i);
+    editIngresoId=null;
+    save();toast('✅ Ingreso actualizado');render();
+  } else {
+    S.ingresos.push({id:Date.now(),name:n,amount:a,currency:iCur,date:dt});
+    save();set('i-name','');set('i-amt','');set('i-date','');toast('✅ Ingreso agregado');render();
+  }
 }
 function delIngreso(id){S.ingresos=S.ingresos.filter(i=>i.id!==id);save();toast('🗑️ Eliminado');render();}
+function openEditGasto(id){
+  const g=S.gastos.find(x=>x.id===id);
+  if(!g)return;
+  editGastoId=id;subG='reg';
+  gCur=g.currency||'COP';gTipo=g.tipo||'';gMedio=String(g.medio||'');
+  render();
+  setTimeout(()=>{
+    set('g-desc',g.desc);set('g-amt',g.amount);set('g-date',g.date);set('g-notes',g.notes||'');
+    const catSel=document.getElementById('g-cat');if(catSel)catSel.value=g.cat;
+    updateTipoLabel();
+  },50);
+}
+function openEditIngreso(id){
+  const i=S.ingresos.find(x=>x.id===id);
+  if(!i)return;
+  editIngresoId=id;subI='reg';iCur=i.currency||'COP';
+  render();
+  setTimeout(()=>{set('i-name',i.name);set('i-amt',i.amount);set('i-date',i.date||'');},50);
+}
+function cancelEditGasto(){editGastoId=null;subG='reg';render();}
+function cancelEditIngreso(){editIngresoId=null;subI='reg';render();}
+
 
 function addAlerta(){
   const n=v('a-name'),a=parseFloat(v('a-amt')||0),dy=parseInt(v('a-day')||0),cat=v('a-cat'),rm=parseInt(v('a-remind')||3);
@@ -501,6 +537,7 @@ function renderGastos(){
     const firstCat=S.categorias[0]?.nombre||'';
     const autoTipo=catTipo(firstCat);
     h+=`<div class="card">
+      ${editGastoId?`<div style="background:rgba(139,139,247,.1);border:1px solid rgba(139,139,247,.3);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between;align-items:center"><span>✏️ Editando gasto</span><button class="btn-del" onclick="cancelEditGasto()" style="color:#aaa;border-color:rgba(170,170,170,.3)">Cancelar</button></div>`:''}
       ${curtog('g',gCur)}
       <div class="fg"><label class="lbl">Descripción</label><input class="inp" id="g-desc" placeholder="Ej: Mercado, Netflix..."></div>
       <div class="row2">
@@ -517,7 +554,7 @@ function renderGastos(){
         <div class="mbrow">${S.mediosPago.map(m=>{const on=String(gMedio)===String(m.id);return`<button class="mbtn2" data-mid="${m.id}" data-color="${m.color}" style="${on?`border-color:${m.color};background:${m.color}18;color:${m.color}`:''}" onclick="setGMedio('${m.id}')">${medIcon(m.tipo)} ${m.nombre}${m.franquicia&&m.tipo==='tarjeta'?' ('+m.franquicia+')':''}</button>`;}).join('')}</div>
       </div>
       <div class="fg"><label class="lbl">Notas (opcional)</label><input class="inp" id="g-notes" placeholder="Detalles..."></div>
-      <button class="btn btn-acc" onclick="addGasto()">Registrar gasto</button>
+      <button class="btn btn-acc" onclick="addGasto()">${editGastoId?'Guardar cambios':'Registrar gasto'}</button>
     </div>`;
   } else {
     if(!mg.length)h+=`<div class="empty"><div class="empty-i">💸</div>Sin gastos este mes</div>`;
@@ -532,6 +569,7 @@ function renderGastos(){
         </div></div>
         <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
           <span style="font-size:13px;font-weight:700;color:#f76a6a">-${fmt(g.amount,g.currency)}</span>
+          <button class="btn-edit" onclick="openEditGasto(${g.id})">✏️</button>
           <button class="btn-del" onclick="delGasto(${g.id})">✕</button>
         </div>
       </div>`;
@@ -549,20 +587,21 @@ function renderIngresos(){
   </div>`;
   if(subI==='reg'){
     h+=`<div class="card">
+      ${editIngresoId?`<div style="background:rgba(139,139,247,.1);border:1px solid rgba(139,139,247,.3);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between;align-items:center"><span>✏️ Editando ingreso</span><button class="btn-del" onclick="cancelEditIngreso()" style="color:#aaa;border-color:rgba(170,170,170,.3)">Cancelar</button></div>`:''}
       ${curtog('i',iCur)}
       <div class="fg"><label class="lbl">Descripción</label><input class="inp" id="i-name" placeholder="Ej: Salario, Bono, Regalo..."></div>
       <div class="row2">
         <div><label class="lbl">Monto</label><input class="inp" id="i-amt" type="number" placeholder="0"></div>
         <div><label class="lbl">Fecha</label><input class="inp" id="i-date" type="date"></div>
       </div>
-      <button class="btn btn-ok" onclick="addIngreso()">Agregar ingreso</button>
+      <button class="btn btn-ok" onclick="addIngreso()">${editIngresoId?'Guardar cambios':'Agregar ingreso'}</button>
     </div>`;
   } else {
     if(!S.ingresos.length)h+=`<div class="empty"><div class="empty-i">💰</div>Sin ingresos registrados.</div>`;
     else S.ingresos.forEach(i=>{
       h+=`<div class="txn"><span style="font-size:22px">💰</span>
         <div style="flex:1"><div style="font-size:13px;font-weight:500">${i.name}</div><div style="font-size:12px;color:#65657a">${i.date?fmtD(i.date):''}</div></div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:#6af7a8">${fmt(i.amount,i.currency)}</span><button class="btn-del" onclick="delIngreso(${i.id})">✕</button></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:#6af7a8">${fmt(i.amount,i.currency)}</span><button class="btn-edit" onclick="openEditIngreso(${i.id})">✏️</button><button class="btn-del" onclick="delIngreso(${i.id})">✕</button></div>
       </div>`;
     });
   }
