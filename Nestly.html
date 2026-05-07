@@ -112,7 +112,6 @@ input,select,button,textarea{font-family:'Outfit',sans-serif;outline:none;}
       <button class="navbtn on" onclick="goTab('dashboard')">📊</button>
       <button class="navbtn" onclick="goTab('gastos')">💸</button>
       <button class="navbtn" onclick="goTab('ingresos')">💰</button>
-      <button class="navbtn" onclick="goTab('ahorros')">🏦</button>
       <button class="navbtn" onclick="goTab('alertas')">🔔</button>
     </div>
     <button class="gearbtn" onclick="openModal('cfg')">⚙️</button>
@@ -168,7 +167,6 @@ const DEF_MEDIOS = [
 ];
 const COLORS = ['#7c6af7','#6af7a8','#6ab8f7','#f7a76a','#f76a6a','#c76af7','#f7c76a','#f76ab8','#6af7f7','#a8f76a','#f7e76a','#f7d76a','#aaaaaa'];
 const FRANQ  = ['Visa','Mastercard','Amex','Diners','Discover','Otro'];
-const FREQS  = ['mensual','quincenal','semanal','anual','único'];
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const TC = {fijo:'#6ab8f7',variable:'#6af7a8',antojo:'#f7a76a'};
 const TI = {fijo:'📌',variable:'🔄',antojo:'✨'};
@@ -179,12 +177,11 @@ const TI = {fijo:'📌',variable:'🔄',antojo:'✨'};
 let S = {
   gastos:[], ingresos:[], alertas:[],
   mediosPago: DEF_MEDIOS,
-  ahorros:[{id:1,plataforma:'Trii',instrumento:'Fondo conservador',meta:0,currency:'USD',snapshots:[]}],
   categorias: DEF_CATS
 };
 let tab='dashboard', month=new Date().getMonth(), year=new Date().getFullYear(), rate=4200;
 let gCur='COP',iCur='COP',aCur='COP',sCur='USD',gTipo='',gMedio='';
-let subG='reg',subI='reg',subA='nueva',subAh='ver';
+let subG='reg',subI='reg',subA='nueva';
 let cfgView='main', editMedioId=null, editCatId=null;
 let pdfTipos={}, saveT=null, ready=false;
 
@@ -224,7 +221,7 @@ const catTipo= n=>{const c=getCat(n);return c?c.tipo:'variable';};
 const tipoOf = g=>g.tipo||catTipo(g.cat)||'variable';
 const getMed = id=>S.mediosPago.find(m=>m.id===parseInt(id));
 const getMG  = ()=>S.gastos.filter(g=>{const d=new Date(g.date+'T12:00:00');return d.getMonth()===month&&d.getFullYear()===year;});
-const totI   = ()=>S.ingresos.reduce((s,i)=>{const b=toCOP(i.amount,i.currency);return s+(i.freq==='quincenal'?b*2:i.freq==='semanal'?b*4.33:i.freq==='anual'?b/12:b);},0);
+const totI   = ()=>S.ingresos.filter(i=>{if(!i.date)return true;const d=new Date(i.date+'T12:00:00');return d.getMonth()===month&&d.getFullYear()===year;}).reduce((s,i)=>s+toCOP(i.amount,i.currency),0);
 const alertSt= a=>{const n=new Date(),d=new Date(n.getFullYear(),n.getMonth(),a.day),dl=Math.round((d-n)/86400000);return{dl,st:dl<0?'v':dl<=a.remind?(dl===0?'h':'p'):'ok'};};
 
 // ═══════════════════════════════════════════════════
@@ -234,7 +231,7 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 
 function goTab(t){
   tab=t;
-  document.querySelectorAll('.navbtn').forEach((b,i)=>b.classList.toggle('on',['dashboard','gastos','ingresos','ahorros','alertas'][i]===t));
+  document.querySelectorAll('.navbtn').forEach((b,i)=>b.classList.toggle('on',['dashboard','gastos','ingresos','alertas'][i]===t));
   render();
 }
 
@@ -245,16 +242,15 @@ function chMonth(d){month+=d;if(month>11){month=0;year++;}if(month<0){month=11;y
 
 function setCur(which,val){
   // Save current form values before re-render
-  const saved={desc:v('g-desc'),amt:v('g-amt'),date:v('g-date'),cat:v('g-cat'),notes:v('g-notes'),iname:v('i-name'),iamt:v('i-amt'),iday:v('i-day'),aname:v('a-name'),aamt:v('a-amt'),aday:v('a-day'),splat:v('s-plat'),sinstr:v('s-instr'),smeta:v('s-meta')};
+  const saved={desc:v('g-desc'),amt:v('g-amt'),date:v('g-date'),cat:v('g-cat'),notes:v('g-notes'),iname:v('i-name'),iamt:v('i-amt'),idate:v('i-date'),aname:v('a-name'),aamt:v('a-amt'),aday:v('a-day')};
   if(which==='g')gCur=val;else if(which==='i')iCur=val;else if(which==='a')aCur=val;else sCur=val;
   render();
   // Restore form values
   if(saved.desc)set('g-desc',saved.desc);if(saved.amt)set('g-amt',saved.amt);if(saved.date)set('g-date',saved.date);
   if(saved.cat){const el=document.getElementById('g-cat');if(el)el.value=saved.cat;}
   if(saved.notes)set('g-notes',saved.notes);
-  if(saved.iname)set('i-name',saved.iname);if(saved.iamt)set('i-amt',saved.iamt);if(saved.iday)set('i-day',saved.iday);
+  if(saved.iname)set('i-name',saved.iname);if(saved.iamt)set('i-amt',saved.iamt);if(saved.idate)set('i-date',saved.idate);
   if(saved.aname)set('a-name',saved.aname);if(saved.aamt)set('a-amt',saved.aamt);if(saved.aday)set('a-day',saved.aday);
-  if(saved.splat)set('s-plat',saved.splat);if(saved.sinstr)set('s-instr',saved.sinstr);if(saved.smeta)set('s-meta',saved.smeta);
 }
 
 function curtog(which,cur){
@@ -281,10 +277,10 @@ function addGasto(){
 function delGasto(id){S.gastos=S.gastos.filter(g=>g.id!==id);save();toast('🗑️ Eliminado');render();}
 
 function addIngreso(){
-  const n=v('i-name'),a=parseFloat(v('i-amt')||0),fr=v('i-freq'),dy=parseInt(v('i-day'))||1;
+  const n=v('i-name'),a=parseFloat(v('i-amt')||0),dt=v('i-date')||new Date().toISOString().slice(0,10);
   if(!n||!a){toast('⚠️ Completa los campos');return;}
-  S.ingresos.push({id:Date.now(),name:n,amount:a,currency:iCur,freq:fr,day:dy});
-  save();set('i-name','');set('i-amt','');set('i-day','');toast('✅ Ingreso agregado');render();
+  S.ingresos.push({id:Date.now(),name:n,amount:a,currency:iCur,date:dt});
+  save();set('i-name','');set('i-amt','');set('i-date','');toast('✅ Ingreso agregado');render();
 }
 function delIngreso(id){S.ingresos=S.ingresos.filter(i=>i.id!==id);save();toast('🗑️ Eliminado');render();}
 
@@ -296,20 +292,7 @@ function addAlerta(){
 }
 function delAlerta(id){S.alertas=S.alertas.filter(a=>a.id!==id);save();toast('🗑️ Eliminado');render();}
 
-function addAhorro(){
-  const p=v('s-plat'),i=v('s-instr'),m=parseFloat(v('s-meta')||0);
-  if(!p||!i){toast('⚠️ Completa plataforma e instrumento');return;}
-  S.ahorros.push({id:Date.now(),plataforma:p,instrumento:i,meta:m,currency:sCur,snapshots:[]});
-  save();set('s-plat','');set('s-instr','');set('s-meta','');toast('💰 Objetivo creado');render();
-}
-function delAhorro(id){S.ahorros=S.ahorros.filter(a=>a.id!==id);save();toast('🗑️ Eliminado');render();}
 
-function addSnap(){
-  const id=parseInt(v('sn-id')||0),val=parseFloat(v('sn-val')||0),nota=v('sn-nota');
-  if(!id||!val){toast('⚠️ Selecciona el ahorro e ingresa el valor');return;}
-  S.ahorros=S.ahorros.map(a=>a.id===id?{...a,snapshots:[...a.snapshots,{fecha:today(),valor:val,nota}]}:a);
-  save();set('sn-val','');set('sn-nota','');toast('📊 Actualización registrada');render();
-}
 
 function setGTipo(t){gTipo=gTipo===t?'':t;render();}
 function setGTipoBtn(t){
@@ -431,18 +414,16 @@ function render(){
   if(tab==='dashboard')el.innerHTML=renderDash();
   else if(tab==='gastos')el.innerHTML=renderGastos();
   else if(tab==='ingresos')el.innerHTML=renderIngresos();
-  else if(tab==='ahorros')el.innerHTML=renderAhorros();
   else if(tab==='alertas')el.innerHTML=renderAlertas();
 }
 
 // ── DASHBOARD ──
 function renderDash(){
   const mg=getMG(),tg=mg.reduce((s,g)=>s+toCOP(g.amount,g.currency),0);
-  const ti=totI(),ta=S.ahorros.reduce((s,a)=>{const l=a.snapshots[a.snapshots.length-1];return l?s+toCOP(l.valor,a.currency):s;},0);
+    const ti=totI();
   const bal=ti-tg,tasa=ti>0?((bal/ti)*100).toFixed(1):'0.0';
   const urg=S.alertas.filter(a=>alertSt(a).st!=='ok');
-  const needUpd=S.ahorros.some(a=>{const l=a.snapshots[a.snapshots.length-1];return!l||dSince(l.fecha)>=15;});
-  const ct={};mg.forEach(g=>{ct[g.cat]=(ct[g.cat]||0)+toCOP(g.amount,g.currency);});
+    const ct={};mg.forEach(g=>{ct[g.cat]=(ct[g.cat]||0)+toCOP(g.amount,g.currency);});
   const cs=Object.entries(ct).sort((a,b)=>b[1]-a[1]),cmax=cs[0]?.[1]||1;
   const mt={};mg.forEach(g=>{if(g.medio)mt[g.medio]=(mt[g.medio]||0)+toCOP(g.amount,g.currency);});
 
@@ -456,15 +437,11 @@ function renderDash(){
   </div>`;
 
   if(urg.length)h+=`<div class="alert-b pulse">🔔<div><strong style="color:#f76a6a">${urg.length} pago(s) próximo(s):</strong> <span style="color:#65657a">${urg.map(a=>a.name).join(', ')}</span></div></div>`;
-  if(needUpd)h+=`<div class="invest-b" onclick="goTab('ahorros');subAh='actualizar';render()">📊<div><strong style="color:#f7d76a">Actualización pendiente</strong><br><span style="color:#65657a;font-size:11px">+15 días sin actualizar inversiones.</span></div></div>`;
 
   h+=`<div class="statg">
     <div class="stat"><div class="slbl">Ingresos / mes</div><div class="sval" style="color:#6af7a8">${fmtCOP(ti)}</div><div class="ssub">${fmtUSD(ti/rate)} USD</div></div>
     <div class="stat"><div class="slbl">Gastos del mes</div><div class="sval" style="color:#f76a6a">${fmtCOP(tg)}</div><div class="ssub">${fmtUSD(tg/rate)} USD</div></div>
-    <div class="stat" style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><div class="slbl">Balance libre</div><div class="sval" style="color:${bal>=0?'#6af7a8':'#f76a6a'}">${fmtCOP(bal)}</div><div class="ssub">${fmtUSD(bal/rate)} USD</div></div>
-      <div><div class="slbl">Total en ahorros</div><div class="sval" style="color:#f7d76a">${fmtCOP(ta)}</div><div class="ssub">${fmtUSD(ta/rate)} USD</div></div>
-    </div>
+    <div class="stat"><div class="slbl">Balance libre</div><div class="sval" style="color:${bal>=0?'#6af7a8':'#f76a6a'}">${fmtCOP(bal)}</div><div class="ssub">${fmtUSD(bal/rate)} USD</div></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
     <button class="btn btn-blue" onclick="openPDF()">📄 Reporte PDF</button>
@@ -488,7 +465,6 @@ function renderDash(){
   h+=`<div class="card"><div class="ctitle">Resumen</div>
     <div class="srow"><span style="font-size:13px;color:#65657a">Tasa de ahorro</span><span style="font-size:14px;font-weight:700;color:${parseFloat(tasa)>=0?'#6af7a8':'#f76a6a'}">${tasa}%</span></div>
     <div class="srow"><span style="font-size:13px;color:#65657a">Transacciones</span><span style="font-size:14px;font-weight:700">${mg.length}</span></div>
-    <div class="srow"><span style="font-size:13px;color:#65657a">Objetivos de ahorro</span><span style="font-size:14px;font-weight:700;color:#f7d76a">${S.ahorros.length}</span></div>
     <div class="srow"><span style="font-size:13px;color:#65657a">Alertas activas</span><span style="font-size:14px;font-weight:700">${S.alertas.length}</span></div>
   </div>`;
 
@@ -574,19 +550,18 @@ function renderIngresos(){
   if(subI==='reg'){
     h+=`<div class="card">
       ${curtog('i',iCur)}
-      <div class="fg"><label class="lbl">Nombre</label><input class="inp" id="i-name" placeholder="Ej: Salario, Freelance..."></div>
+      <div class="fg"><label class="lbl">Descripción</label><input class="inp" id="i-name" placeholder="Ej: Salario, Bono, Regalo..."></div>
       <div class="row2">
         <div><label class="lbl">Monto</label><input class="inp" id="i-amt" type="number" placeholder="0"></div>
-        <div><label class="lbl">Periodicidad</label><select class="inp" id="i-freq">${FREQS.map(f=>`<option value="${f}">${cap(f)}</option>`).join('')}</select></div>
+        <div><label class="lbl">Fecha</label><input class="inp" id="i-date" type="date"></div>
       </div>
-      <div class="fg"><label class="lbl">Día de pago</label><input class="inp" id="i-day" type="number" min="1" max="31" placeholder="Ej: 15"></div>
       <button class="btn btn-ok" onclick="addIngreso()">Agregar ingreso</button>
     </div>`;
   } else {
-    if(!S.ingresos.length)h+=`<div class="empty"><div class="empty-i">💰</div>Sin ingresos registrados</div>`;
+    if(!S.ingresos.length)h+=`<div class="empty"><div class="empty-i">💰</div>Sin ingresos registrados.</div>`;
     else S.ingresos.forEach(i=>{
       h+=`<div class="txn"><span style="font-size:22px">💰</span>
-        <div style="flex:1"><div style="font-size:13px;font-weight:500">${i.name}</div><div style="font-size:11px;color:#65657a;margin-top:1px">${cap(i.freq)} · día ${i.day}</div></div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:500">${i.name}</div><div style="font-size:12px;color:#65657a">${i.date?fmtD(i.date):''}</div></div>
         <div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:#6af7a8">${fmt(i.amount,i.currency)}</span><button class="btn-del" onclick="delIngreso(${i.id})">✕</button></div>
       </div>`;
     });
@@ -594,62 +569,7 @@ function renderIngresos(){
   return h;
 }
 
-// ── AHORROS ──
-function renderAhorros(){
-  let h=`<div style="font-size:20px;font-weight:800;margin-bottom:4px">Ahorros e Inversiones</div>
-  <div style="font-size:12px;color:#65657a;margin-bottom:14px">Actualización recomendada cada 15 días</div>
-  <div class="stabs">
-    <button class="stab ${subAh==='ver'?'on':''}" onclick="subAh='ver';render()">Ver todo</button>
-    <button class="stab ${subAh==='actualizar'?'on':''}" onclick="subAh='actualizar';render()">Actualizar</button>
-    <button class="stab ${subAh==='nuevo'?'on':''}" onclick="subAh='nuevo';render()">+ Nuevo</button>
-  </div>`;
 
-  if(subAh==='ver'){
-    if(!S.ahorros.length)h+=`<div class="empty"><div class="empty-i">🏦</div>Sin objetivos</div>`;
-    else S.ahorros.forEach(a=>{
-      const last=a.snapshots[a.snapshots.length-1],prev=a.snapshots[a.snapshots.length-2];
-      const val=last?last.valor:0,diff=last&&prev?((last.valor-prev.valor)/prev.valor*100).toFixed(1):null;
-      const dias=last?dSince(last.fecha):null,nu=!last||dias>=15;
-      const pts=a.snapshots.length>=2?miniChart(a.snapshots):'<div style="font-size:11px;color:#65657a;text-align:center;padding:8px 0">Registra 2+ actualizaciones para la gráfica</div>';
-      h+=`<div class="card" style="border-color:${nu?'rgba(247,215,106,.3)':'#252535'}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <div><div style="font-weight:700;font-size:15px">${a.plataforma}</div><div style="font-size:12px;color:#65657a;margin-top:2px">${a.instrumento}</div></div>
-          <button class="btn-del" onclick="delAhorro(${a.id})">✕</button>
-        </div>
-        <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:10px">
-          <div><div style="font-size:10px;color:#65657a;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Valor actual</div>
-          <div style="font-size:22px;font-weight:800;color:#f7d76a">${a.currency==='USD'?fmtUSD(val):fmtCOP(val)} ${a.currency}</div>
-          ${a.currency==='USD'?`<div style="font-size:11px;color:#65657a">≈ ${fmtCOP(val*rate)} COP</div>`:''}</div>
-          ${diff!==null?`<div style="margin-bottom:4px;font-size:13px;font-weight:700;color:${parseFloat(diff)>=0?'#6af7a8':'#f76a6a'}">${parseFloat(diff)>=0?'▲':'▼'} ${Math.abs(diff)}%</div>`:''}
-        </div>
-        ${a.meta>0?`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:#65657a;margin-bottom:4px"><span>Meta: ${a.currency==='USD'?fmtUSD(a.meta):fmtCOP(a.meta)} ${a.currency}</span><span>${Math.min(100,(val/a.meta*100)).toFixed(1)}%</span></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,val/a.meta*100).toFixed(1)}%;background:#f7d76a"></div></div></div>`:''}
-        ${pts}
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
-          <div style="font-size:11px;color:${nu?'#f7d76a':'#65657a'}">${!last?'Sin actualizaciones aún':nu?`⚠️ Hace ${dias} días`:`✓ Hace ${dias} días`}</div>
-          <span style="font-size:11px;color:#65657a">${a.snapshots.length} registros</span>
-        </div>
-      </div>`;
-    });
-  } else if(subAh==='actualizar'){
-    h+=`<div class="card">
-      <div class="fg"><label class="lbl">Selecciona el ahorro</label>
-        <select class="inp" id="sn-id"><option value="">— Seleccionar —</option>${S.ahorros.map(a=>`<option value="${a.id}">${a.plataforma} · ${a.instrumento}</option>`).join('')}</select>
-      </div>
-      <div class="fg"><label class="lbl">Nuevo valor</label><input class="inp" id="sn-val" type="number" placeholder="0.00"></div>
-      <div class="fg"><label class="lbl">Nota (opcional)</label><input class="inp" id="sn-nota" placeholder="Ej: Mes positivo..."></div>
-      <button class="btn btn-gold" onclick="addSnap()">📊 Registrar actualización</button>
-    </div>`;
-  } else {
-    h+=`<div class="card">
-      ${curtog('s',sCur)}
-      <div class="fg"><label class="lbl">Plataforma</label><input class="inp" id="s-plat" placeholder="Ej: Trii, Binance..."></div>
-      <div class="fg"><label class="lbl">Instrumento / Fondo</label><input class="inp" id="s-instr" placeholder="Ej: Fondo conservador, ETF..."></div>
-      <div class="fg"><label class="lbl">Meta (opcional)</label><input class="inp" id="s-meta" type="number" placeholder="0"></div>
-      <button class="btn btn-gold" onclick="addAhorro()">Crear objetivo</button>
-    </div>`;
-  }
-  return h;
-}
 
 // ── ALERTAS ──
 function renderAlertas(){
@@ -743,7 +663,7 @@ function renderCfg(){
 
 function delHTML(){return`<div class="confirm-del"><div style="font-size:13px;color:#f76a6a;margin-bottom:12px;font-weight:600">⚠️ ¿Estás seguro? No se puede deshacer.</div><div style="display:flex;gap:8px"><button onclick="renderCfg()" style="flex:1;padding:10px;border-radius:9px;border:1px solid #252535;background:#191926;color:#65657a;cursor:pointer;font-size:13px;font-weight:600">Cancelar</button><button onclick="resetAll()" style="flex:1;padding:10px;border-radius:9px;border:none;background:#f76a6a;color:#fff;cursor:pointer;font-size:13px;font-weight:700">Sí, borrar todo</button></div></div>`;}
 
-function resetAll(){S={gastos:[],ingresos:[],alertas:[],mediosPago:DEF_MEDIOS,ahorros:[],categorias:DEF_CATS};save();closeModal('cfg');toast('🗑️ Datos eliminados');render();}
+function resetAll(){S={gastos:[],ingresos:[],alertas:[],mediosPago:DEF_MEDIOS,categorias:DEF_CATS};save();closeModal('cfg');toast('🗑️ Datos eliminados');render();}
 
 function renderCfgMedioForm(){
   const m=editMedioId!==null?getMed(editMedioId):null;
