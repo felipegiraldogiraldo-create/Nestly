@@ -619,7 +619,21 @@ function renderDash(){
           <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${clr}"></div></div>
         </div>`;
       }).join(''):`<div style="color:#888;font-size:13px;text-align:center;padding:8px 0">Sin presupuestos. <button class="btn" style="font-size:12px;padding:3px 8px;background:#252535" onclick="document.getElementById('pres-form').style.display='block'">Agregar +</button></div>`}
-    </div>`;
+  <div style="margin-top:12px;padding-top:12px;border-top:2px solid #252535;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px;">
+          <span style="font-weight:700;color:#eeeef8;">Total presupuestado</span>
+          <span style="font-weight:700;color:#8b7cf8;">${fmtCOP(Object.values(S.presupuestos||{}).reduce((a,v)=>a+(v||0),0))}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px;">
+          <span style="color:#65657a;">Gastado este mes</span>
+          <span style="font-weight:600;color:${tg>Object.values(S.presupuestos||{}).reduce((a,v)=>a+(v||0),0)?'#f76a6a':'#6af7a8'}">${fmtCOP(tg)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+          <span style="color:#65657a;">Uso global</span>
+          <span style="font-weight:700;color:${(()=>{const tb=Object.values(S.presupuestos||{}).reduce((a,v)=>a+(v||0),0);const pct=tb>0?Math.round((tg/tb)*100):0;return pct>90?'#f76a6a':pct>70?'#f7d76a':'#8b7cf8';})()}">${(()=>{const tb=Object.values(S.presupuestos||{}).reduce((a,v)=>a+(v||0),0);return tb>0?Math.round((tg/tb)*100)+'%':'—';})()}</span>
+        </div>
+      </div>
+        </div>`;
   }
 
   {
