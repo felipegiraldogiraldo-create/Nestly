@@ -642,27 +642,59 @@ function renderDash(){
       </table></div>
     </div>`;
   }
-// Gráfica de gastos por categoría
+// Gráfica de torta por categoría
   {
+    const mg=getMG();
+    const ti=totI();
+    const tg=mg.reduce((s,g)=>s+(g.amount||0),0);
     const cats={};
-    (S.gastos||[]).forEach(g=>{const c=g.cat||'Otros';cats[c]=(cats[c]||0)+(g.monto||0);});
-    const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    mg.forEach(g=>{const c=g.cat||'Otros';cats[c]=(cats[c]||0)+(g.amount||0);});
+    const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
     if(entries.length>0){
-      const maxVal=entries[0][1]||1;
-      const bars=entries.map(([cat,val])=>{
-        const pct=Math.round((val/maxVal)*100);
-        return `<div style="margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-            <span>${cat}</span><span style="color:#8b7cf8;">${fmtCOP(val)}</span>
-          </div>
-          <div style="background:#191926;border-radius:99px;height:8px;overflow:hidden;">
-            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#8b7cf8,#b09cf8);border-radius:99px;transition:width .6s ease;"></div>
-          </div>
+      const colors=['#8b7cf8','#f76a8b','#6af7a8','#f7d76a','#6ab8f7','#f7a86a','#b09cf8','#f76af7','#6af7d7','#f7f76a'];
+      const total=tg||1;
+      // Build SVG pie
+      let svgSlices='',legendHtml='',startAngle=0;
+      entries.forEach(([cat,val],ci)=>{
+        const pct=val/total;
+        const angle=pct*2*Math.PI;
+        const endAngle=startAngle+angle;
+        const x1=Math.cos(startAngle-Math.PI/2),y1=Math.sin(startAngle-Math.PI/2);
+        const x2=Math.cos(endAngle-Math.PI/2),y2=Math.sin(endAngle-Math.PI/2);
+        const largeArc=angle>Math.PI?1:0;
+        const col=colors[ci%colors.length];
+        if(pct<0.999){
+          svgSlices+=`<path d="M0,0 L${(x1*45).toFixed(2)},${(y1*45).toFixed(2)} A45,45,0,${largeArc},1,${(x2*45).toFixed(2)},${(y2*45).toFixed(2)} Z" fill="${col}" stroke="#11111c" stroke-width="1"/>`;
+        } else {
+          svgSlices+=`<circle r="45" fill="${col}"/>`;
+        }
+        const pctI=ti>0?Math.round((val/ti)*100):0;
+        legendHtml+=`<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:12px;">
+          <div style="width:10px;height:10px;border-radius:3px;background:${col};flex-shrink:0;"></div>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cat}</span>
+          <span style="color:#8b7cf8;font-weight:600;">${pctI}%</span>
+          <span style="color:#65657a;font-size:11px;">${fmtCOP(val)}</span>
         </div>`;
-      }).join('');
+        startAngle=endAngle;
+      });
+      // Balance libre %
+      const balPct=ti>0?Math.max(0,Math.round(((ti-tg)/ti)*100)):0;
+      const balVal=ti-tg;
+      const balColor=balVal>=0?'#6af7a8':'#f76a6a';
       h+=`<div class="card">
-        <div class="ctitle">📊 Gastos por Categoría</div>
-        ${bars}
+        <div class="ctitle">🥧 Distribución del ingreso — ${fmtCOP(ti)}</div>
+        <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px;">
+          <svg viewBox="-50,-50,100,100" width="110" height="110" style="flex-shrink:0;">${svgSlices}</svg>
+          <div style="flex:1;min-width:0;">
+            ${legendHtml}
+            <div style="display:flex;align-items:center;gap:7px;margin-top:8px;padding-top:8px;border-top:1px solid #252535;font-size:12px;">
+              <div style="width:10px;height:10px;border-radius:3px;background:${balColor};flex-shrink:0;"></div>
+              <span style="flex:1;">Balance libre</span>
+              <span style="color:${balColor};font-weight:700;">${balPct}%</span>
+              <span style="color:#65657a;font-size:11px;">${fmtCOP(balVal)}</span>
+            </div>
+          </div>
+        </div>
       </div>`;
     }
   }
@@ -978,12 +1010,12 @@ function exportCSV(tipo){
   const S=state;
   let rows,headers,filename;
   if(tipo==='gastos'){
-    headers=['Fecha','Descripcion','Monto','Categoria','Recurrente'];
-    rows=(S.gastos||[]).map(g=>[g.fecha||'',g.desc||'',(g.monto||0).toFixed(2),g.cat||'',g.recurrente?'Si':'No']);
+    headers=['Fecha','Descripcion','Monto','Categoria','Tipo','Recurrente'];
+    rows=(S.gastos||[]).map(g=>[g.date||'',g.desc||'',(g.amount||0).toFixed(2),g.cat||'',g.tipo||'',g.recurrente?'Si':'No']);
     filename='gastos_nestly.csv';
   } else {
-    headers=['Fecha','Descripcion','Monto','Categoria'];
-    rows=(S.ingresos||[]).map(i=>[i.fecha||'',i.desc||'',(i.monto||0).toFixed(2),i.category||'Otros']);
+    headers=['Fecha','Descripcion','Monto'];
+    rows=(S.ingresos||[]).map(i=>[i.date||'',i.name||'',(i.amount||0).toFixed(2)]);
     filename='ingresos_nestly.csv';
   }
   const csv=[headers,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
